@@ -5,37 +5,31 @@ expre = pd.read_csv('data/tcga_brca_expression_raw.tsv', sep='\t')
 pheno = pd.read_csv('data/tcga_brca_phenotypes.tsv', sep='\t')
 
 # --- Clean & filter ---
+# --- Replace missing receptor status values with secondary source ---
+pheno["breast_carcinoma_estrogen_receptor_status"] = pheno["breast_carcinoma_estrogen_receptor_status"].fillna(
+    pheno["ER_Status_nature2012"]
+)
+pheno["breast_carcinoma_progesterone_receptor_status"] = pheno["breast_carcinoma_progesterone_receptor_status"].fillna(
+    pheno["PR_Status_nature2012"]
+)
+
+# --- Remove rows where both receptor statuses are missing ---
+mask_both_nan = (
+    pheno["breast_carcinoma_estrogen_receptor_status"].isna() &
+    pheno["breast_carcinoma_progesterone_receptor_status"].isna()
+)
+pheno = pheno[~mask_both_nan]
+
+# --- Filter for valid sample types ---
 pheno = pheno[pheno["sample_type"].isin(["Primary Tumor", "Solid Tissue Normal"])]
 
-pheno = pheno.dropna(subset=[
-    "Gender_nature2012",
-    "Age_at_Initial_Pathologic_Diagnosis_nature2012",
-    "ER_Status_nature2012",
-    "PR_Status_nature2012",
-    "HER2_Final_Status_nature2012"
-])
-
-pheno["label"] = pheno["sample_type"].map({
-    "Primary Tumor": 1,
-    "Solid Tissue Normal": 0
-})
-
-selected_cols = [
-    "Gender_nature2012",
-    "Age_at_Initial_Pathologic_Diagnosis_nature2012",
-    "ER_Status_nature2012",
-    "PR_Status_nature2012",
-    "HER2_Final_Status_nature2012",
-    "label"
+# --- Remove ambiguous or missing values ---
+pheno = pheno[
+    (pheno["breast_carcinoma_estrogen_receptor_status"] != "Indeterminate") &
+    (pheno["breast_carcinoma_progesterone_receptor_status"] != "Indeterminate") &
+    (~pheno["gender"].isna()) &
+    (pheno["HER2_Final_Status_nature2012"] != "Equivocal")
 ]
-
-pheno = pheno[selected_cols].copy()
-
-expre_T = expre.T
-
-common_samples = expre_T.index.intersection(pheno.index)
-expre_T = expre_T.loc[common_samples]
-pheno = pheno.loc[common_samples]
 
 # --- 3. Preprocessing / scaling ---
 
